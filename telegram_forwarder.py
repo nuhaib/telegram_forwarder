@@ -4,8 +4,8 @@ from telethon import TelegramClient, events, functions, types
 from telethon.errors import ChatAdminRequiredError
 
 # Your Telegram credentials
-api_id = 24316277  # Replace with your actual API ID
-api_hash = '963c617eadb5c97c71aaee79df3a9e85'  # Replace with your actual API Hash
+api_id = 26454923  # Replace with your actual API ID
+api_hash = 'd20b1753029d86716271b18f783b43ed'  # Replace with your actual API Hash
 source_channel_id = -1002496657106  # Replace with actual source channel
 
 client = TelegramClient('my_account', api_id, api_hash, flood_sleep_threshold=0)

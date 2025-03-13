@@ -1,98 +1,95 @@
 import re
 import asyncio
-import json
-import os
 from telethon import TelegramClient, events, functions, types
-from telethon.errors import ChatAdminRequiredError, FloodWaitError
+from telethon.errors import ChatAdminRequiredError
 
 # Your Telegram credentials
-api_id = 26454923  # Replace with your actual API ID
-api_hash = 'd20b1753029d86716271b18f783b43ed'  # Replace with your actual API Hash
-source_channel_id = -1002496657106  # Replace with actual source channel
+api_id = 24316277  # Replace with your actual API ID
+api_hash = '963c617eadb5c97c71aaee79df3a9e85'  # Replace with your actual API Hash
 
-client = TelegramClient('my_account', api_id, api_hash, flood_sleep_threshold=60)  # Prevents rate limits
+# URL Replacement Settings
+custom_url = "https://tc9987.cc/register?invite_code=0788812949052"
+specific_channels = {-1002094341716, -10011223344}  # Channels where URLs should be removed
 
+# Source Channel ID
+source_channel_id = -1001880177414  # Replace with actual source channel
+
+client = TelegramClient('my_account', api_id, api_hash)
+
+# Store admin channels globally to avoid fetching them repeatedly
 admin_channels = set()
-failed_channels = set()
-CACHE_FILE = "admin_channels.json"  # Cache file to avoid repeated API calls
 
 async def get_admin_channels():
-    """Fetch the list of admin channels while handling rate limits."""
+    """Fetch all channels where the user is an admin (runs once at startup)."""
     global admin_channels
-    if os.path.exists(CACHE_FILE):  # Load cached data if available
-        with open(CACHE_FILE, "r") as f:
-            admin_channels = set(json.load(f))
-        print(f"Loaded cached admin channels: {admin_channels}")
-        return
+    dialogs = await client.get_dialogs()
+    for dialog in dialogs:
+        if dialog.is_channel:
+            try:
+                permissions = await client(functions.channels.GetParticipantRequest(dialog.id, 'me'))
+                if isinstance(permissions.participant, types.ChannelParticipantAdmin):
+                    admin_channels.add(dialog.id)
+            except Exception:
+                pass  # Ignore errors for inaccessible channels
 
-    try:
-        dialogs = await client.get_dialogs(limit=50)  # Reduce API requests for premium accounts
-        new_admin_channels = set()
-        for dialog in dialogs:
-            if dialog.is_channel:
-                try:
-                    permissions = await client(functions.channels.GetParticipantRequest(dialog.id, 'me'))
-                    if isinstance(permissions.participant, types.ChannelParticipantAdmin):
-                        new_admin_channels.add(dialog.id)
-                except FloodWaitError as e:
-                    print(f"Skipping {dialog.id} due to rate limit: {e}")
-                    continue
-                except Exception as e:
-                    print(f"Skipping {dialog.id}: {e}")
+async def process_message(text, target_id):
+    """Modifies message based on forwarding rules."""
+    if not text:
+        return text
 
-        admin_channels = new_admin_channels
+    is_specific = target_id in specific_channels
+    url_pattern = re.compile(r'https?://\S+')
 
-        # Save admin channels to cache
-        with open(CACHE_FILE, "w") as f:
-            json.dump(list(admin_channels), f)
+    if is_specific:
+        text = url_pattern.sub('', text)  # Remove URLs for specific channels
+        blocked_texts = {'__', 'Game Link:', 'Game Link: https://tc9987.win/register?invite_code=9631811487671'}
+        for phrase in blocked_texts:
+            text = text.replace(phrase, '')  # Remove unwanted texts
+    else:
+        text = url_pattern.sub(custom_url, text)  # Replace URLs for general channels
 
-        print(f"Admin channels updated: {admin_channels}")
-    except Exception as e:
-        print(f"Error updating admin channels: {e}")
+    return text.strip()
 
-def process_message(text):
-    """Removes URLs from the message instantly while preserving formatting."""
-    return re.sub(r'https?://\S+', '', text) if text else text
+failed_channels = set()
 
 @client.on(events.NewMessage(chats=source_channel_id))
 async def forward_messages(event):
-    """Forwards all messages, including premium stickers, emojis, media, and formatting."""
+    """Forward messages while preserving emojis and formatting."""
+    global admin_channels
     msg = event.message
+    text = msg.text if msg.text else ''
 
-    # Process text (remove URLs but keep emojis & formatting)
-    processed_text = process_message(msg.text or msg.message)
+    tasks = []  # Store async tasks to run them concurrently
 
-    # Extract media & formatting
-    media = msg.media if msg.media else None  # Supports images, videos, stickers
-    reply_markup = msg.reply_markup  # Keeps buttons (if any)
-    entities = msg.entities  # Ensures formatting (bold, italics, premium emojis) is preserved
-
-    tasks = []
     for channel_id in admin_channels:
         if channel_id in failed_channels:
             continue  # Skip failed channels
 
-        try:
-            tasks.append(
-                client.send_message(
-                    entity=channel_id,
-                    message=processed_text,
-                    file=media,  # Ensures media (stickers, emojis, images) is forwarded
-                    link_preview=False,
-                    formatting_entities=entities,  # Correctly forwards emojis & formatting
-                    buttons=reply_markup  # Keeps inline buttons
-                )
-            )
-        except Exception as e:
-            print(f"Failed to forward message to {channel_id}: {e}")
+        processed_text = await process_message(text, channel_id)
 
-    # Send all messages asynchronously
-    await asyncio.gather(*tasks, return_exceptions=True)
+        tasks.append(send_message(channel_id, processed_text, msg.media))
+
+    await asyncio.gather(*tasks)  # Run all sends in parallel
+
+async def send_message(channel_id, text, media):
+    """Send message asynchronously."""
+    try:
+        await client.send_message(
+            entity=channel_id,
+            message=text,
+            file=media if media else None,
+            link_preview=False
+        )
+    except ChatAdminRequiredError:
+        failed_channels.add(channel_id)  # Avoid retrying failed channels
+    except Exception as e:
+        print(f"Failed to send message to {channel_id}: {e}")
 
 async def main():
-    await client.start()
-    await get_admin_channels()  # Fetch admin channels at startup
+    """Startup function to initialize everything."""
+    await get_admin_channels()  # Fetch admin channels once
     print("Forwarder is running...")
-    await client.run_until_disconnected()
 
-asyncio.run(main())
+with client:
+    client.loop.run_until_complete(main())
+    client.run_until_disconnected()

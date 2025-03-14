@@ -99,6 +99,7 @@ async def forward_messages(event):
 
 async def main():
     """Startup function to initialize everything."""
+    await client.start()  # Ensure the client is connected
     await get_admin_channels()  # Fetch admin channels once
     print("Forwarder is running...")
     await client.run_until_disconnected()

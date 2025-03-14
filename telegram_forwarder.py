@@ -23,8 +23,7 @@ source_channel_id = -1002496657106  # Replace with actual source channel
 target_channels = [-1002144912406, -1002149387601, -1002200847921, -1002212730450, -1002020969286]  # Target channels
 
 # Initialize Telegram client with optimized flood protection
-client = TelegramClient('my_account', api_id, api_hash, flood_sleep_threshold=10)
-
+client = TelegramClient('script1_session', api_id, api_hash, flood_sleep_threshold=10)
 # Store admin channels to avoid redundant API calls
 admin_channels = set()
 failed_channels = set()  # Track channels where sending fails
@@ -42,7 +41,9 @@ async def get_admin_channels():
             except Exception:
                 pass  # Ignore errors for inaccessible channels
 
-@client.on(events.NewMessage(chats=source_channel_id))
+source_channel_script1 = [-1002496657106]  # Replace with Script 1's source channels
+
+@client.on(events.NewMessage(chats=source_channel_script1))
 async def forward_messages(event):
     """Handles new messages and sends them efficiently without 'Forwarded from' tag."""
     global admin_channels

@@ -18,68 +18,49 @@ if not api_id or not api_hash:
 
 api_id = int(api_id)  # Convert API ID to integer
 
-# Source & Target Channels
-source_channel_id = -1002496657106  # Replace with actual source channel
-target_channels = [-1002144912406, -1002149387601, -1002200847921, -1002212730450, -1002020969286]  # Target channels
+# Source & Target Channels (Script 1)
+source_channel_script1 = [-1002496657106]  # Replace with actual source channel(s) for Script 1
+target_channels_script1 = [-1002144912406, -1002149387601, -1002200847921, -1002212730450, -1002020969286]  # Replace with actual target channels
 
-# Initialize Telegram client with optimized flood protection
+# Initialize Telegram client
 client = TelegramClient('script1_session', api_id, api_hash, flood_sleep_threshold=10)
-# Store admin channels to avoid redundant API calls
-admin_channels = set()
-failed_channels = set()  # Track channels where sending fails
-
-async def get_admin_channels():
-    """Fetches all channels where the bot is an admin to prevent unnecessary API calls."""
-    global admin_channels
-    dialogs = await client.get_dialogs()
-    for dialog in dialogs:
-        if dialog.is_channel:
-            try:
-                permissions = await client(functions.channels.GetParticipantRequest(dialog.id, 'me'))
-                if isinstance(permissions.participant, types.ChannelParticipantAdmin):
-                    admin_channels.add(dialog.id)
-            except Exception:
-                pass  # Ignore errors for inaccessible channels
-
-source_channel_script1 = [-1002496657106]  # Replace with Script 1's source channels
 
 @client.on(events.NewMessage(chats=source_channel_script1))
 async def forward_messages(event):
-    """Handles new messages and sends them efficiently without 'Forwarded from' tag."""
-    global admin_channels
-
+    """Forward messages only to Script 1's assigned target channels."""
     msg = event.message
-    text = msg.text if msg.text else ""
+    text = msg.raw_text or ""
+    media = msg.media if msg.media else None
+    entities = msg.entities  # Preserve formatting
+    buttons = msg.reply_markup  # Preserve buttons
 
-    tasks = []  # Store tasks to run them concurrently
-    for channel_id in admin_channels:
-        if channel_id in failed_channels:
-            continue  # Skip channels that failed previously
+    tasks = []
+    for channel_id in target_channels_script1:
+        tasks.append(send_message(channel_id, text, media, entities, buttons))
 
-        tasks.append(send_message(channel_id, text, msg.media))
+    await asyncio.gather(*tasks)
 
-    await asyncio.gather(*tasks)  # Run all sends in parallel
-
-async def send_message(channel_id, text, media):
-    """Sends message asynchronously to prevent delays."""
+async def send_message(channel_id, text, media, entities, buttons):
+    """Send messages while keeping formatting, media, and buttons intact."""
     try:
         await client.send_message(
             entity=channel_id,
             message=text,
             file=media if media else None,
-            link_preview=False  # Disables link previews to speed up sending
+            link_preview=True,
+            buttons=buttons,
+            formatting_entities=entities
         )
     except ChatAdminRequiredError:
-        failed_channels.add(channel_id)  # Avoid retrying failed channels
+        logger.error(f"Bot is not an admin in {channel_id}")
     except Exception as e:
         logger.error(f"Failed to send message to {channel_id}: {e}")
 
 async def main():
-    """Startup function to initialize everything."""
-    await get_admin_channels()  # Fetch admin channels once at startup
-    print("Forwarder is running...")
+    """Start the Telegram client."""
+    print("Script 1 Forwarder is running...")
+    await client.start()
+    await client.run_until_disconnected()
 
-# Run the bot using an event loop
 with client:
     client.loop.run_until_complete(main())
-    client.run_until_disconnected()

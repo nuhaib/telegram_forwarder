@@ -3,8 +3,8 @@ import asyncio
 import logging
 from telethon import TelegramClient, events
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure logging (only log errors to reduce RAM usage)
+logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
 # Load API credentials from environment variables
@@ -26,27 +26,35 @@ client = TelegramClient('my_account', api_id, api_hash, flood_sleep_threshold=10
 
 @client.on(events.NewMessage(chats=source_channel_id))
 async def forward_messages(event):
-    """Handles new messages and forwards them efficiently."""
+    """Handles new messages and forwards them without keeping the original sender name."""
     for channel_id in target_channels:
-        asyncio.create_task(forward_to_channel(channel_id, event))
+        asyncio.create_task(repost_message(channel_id, event))
 
-async def forward_to_channel(channel_id, event):
-    """Forwards a message to a target channel asynchronously."""
+async def repost_message(channel_id, event):
+    """Reposts the message instead of forwarding (to remove sender name)."""
     try:
-        # Use forward_messages for efficiency
-        await client.forward_messages(channel_id, event.message)
-        logger.info(f"Forwarded message to {channel_id}")
+        message_text = event.message.raw_text or ""
+        media = event.message.media if event.message.media else None
+
+        await client.send_message(
+            channel_id,
+            message=message_text,
+            file=media,
+            link_preview=True,
+            buttons=event.message.reply_markup,
+            formatting_entities=event.message.entities
+        )
     except Exception as e:
-        logger.error(f"Failed to forward message to {channel_id}: {e}")
+        logger.error(f"Failed to send message to {channel_id}: {e}")
 
 async def main():
     """Starts the Telegram client and runs until disconnected."""
     try:
         await client.start()
-        logger.info("Forwarder is running...")
+        print("Forwarder is running...")  # Only print once
         await client.run_until_disconnected()
     except KeyboardInterrupt:
-        logger.info("Shutting down gracefully...")
+        print("Shutting down gracefully...")
     finally:
         await client.disconnect()
 

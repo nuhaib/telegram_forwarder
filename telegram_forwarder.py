@@ -49,5 +49,5 @@ async def main():
     await client.run_until_disconnected()
 
 # Run the bot
-if name == "main":
+if __name__ == "__main__":  
     client.loop.run_until_complete(main())

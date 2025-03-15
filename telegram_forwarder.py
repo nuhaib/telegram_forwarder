@@ -20,7 +20,7 @@ api_id = int(api_id)  # Convert API ID to integer
 
 # Source & Target Channels (Script 1)
 source_channel_script1 = [-1002496657106]  # Replace with actual source channel(s) for Script 1
-target_channels_script1 = [-1002144912406, -1002149387601, -1002200847921, -1002212730450, -1002020969286]  # Replace with actual target channels
+target_channels_script1 = [-1002144912406, -1002149387601, -1002200847921, -1002212730450, -1002020969286, -1002389295588]  # Replace with actual target channels
 
 # Initialize Telegram client
 client = TelegramClient('script1_session', api_id, api_hash, flood_sleep_threshold=10)
